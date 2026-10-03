@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "ShopNow",
+    "slug": "shopnow-mobile",
+    "scheme": "shopnow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.shopnow.mobile"
+    },
+    "android": {
+      "package": "com.shopnow.mobile",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "15637dc6-d616-4d10-b165-90ff4ee6aafe"
+      }
+    },
+    "owner": "emmy-anie"
+  }
+}
