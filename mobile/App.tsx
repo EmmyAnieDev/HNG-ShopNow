@@ -8,13 +8,13 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 import { shopApi } from "./src/api/client";
 import type { Cart, CartItem, CheckoutResult, Order, Product } from "./src/api/types";
@@ -118,6 +118,15 @@ function Field({
 }
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ShopNowApp />
+    </SafeAreaProvider>
+  );
+}
+
+function ShopNowApp() {
+  const insets = useSafeAreaInsets();
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -145,6 +154,7 @@ export default function App() {
     () => (screen === "product" || screen === "checkout" || screen === "order" ? "shop" : screen),
     [screen],
   );
+  const showTabBar = (["shop", "cart", "orders", "account"] as Tab[]).includes(screen as Tab);
 
   const refreshCart = useCallback(async (showLoader = false) => {
     if (!accessToken) {
@@ -258,11 +268,34 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (screen !== "cart" || !accessToken) return;
-    void refreshCart();
-    const timer = setInterval(() => void refreshCart(), 20_000);
-    return () => clearInterval(timer);
-  }, [screen, accessToken, refreshCart]);
+    const client = supabase;
+    const userId = session?.user.id;
+    if (!client || !accessToken || !userId) return;
+
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const channel = client
+      .channel(`mobile-cart-items:${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cart_items" },
+        () => {
+          if (refreshTimer) clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(() => void refreshCart(), 150);
+        },
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void refreshCart();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("Mobile cart realtime subscription failed", { status });
+        }
+      });
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      void client.removeChannel(channel);
+    };
+  }, [accessToken, refreshCart, session?.user.id]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -380,7 +413,7 @@ export default function App() {
   async function signOut() {
     setBusy(true);
     try {
-      const { error: signOutError } = await requireSupabase().auth.signOut();
+      const { error: signOutError } = await requireSupabase().auth.signOut({ scope: "local" });
       if (signOutError) throw signOutError;
       setScreen("shop");
       setNotice("You have signed out.");
@@ -495,7 +528,6 @@ export default function App() {
         <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshCart(true)} tintColor={COLORS.green} />}>
           <View style={styles.sectionHeading}>
             <View><Text style={styles.eyebrow}>YOUR SELECTION</Text><Text style={styles.sectionTitle}>Your bag</Text></View>
-            <Pressable onPress={() => void refreshCart(true)}><Text style={styles.refreshText}>Sync now</Text></Pressable>
           </View>
           {!cart?.items.length ? (
             <EmptyState title="Your bag is empty." body="Add something lovely from the collection." action="Explore the shop" onPress={() => navigate("shop")} />
@@ -631,7 +663,7 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={[styles.safe, { paddingTop: insets.top, paddingBottom: showTabBar ? 0 : insets.bottom }]}>
       <StatusBar style="dark" />
       <View style={styles.header}>
         <Pressable onPress={() => navigate("shop")} style={styles.brand}>
@@ -659,8 +691,8 @@ export default function App() {
 
       <View style={styles.content}>{renderContent()}</View>
 
-      {(["shop", "cart", "orders", "account"] as Tab[]).includes(screen as Tab) && (
-        <View style={styles.tabBar}>
+      {showTabBar && (
+        <View style={[styles.tabBar, { height: 58 + insets.bottom, paddingBottom: insets.bottom }]}>
           {([
             ["shop", "Shop"],
             ["cart", `Bag${cart?.totalQuantity ? ` (${cart.totalQuantity})` : ""}`],
@@ -674,7 +706,7 @@ export default function App() {
           ))}
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -705,13 +737,13 @@ function EmptyState({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.paper },
   flex: { flex: 1 },
-  header: { height: 62, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: COLORS.line, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.paper },
-  brand: { flexDirection: "row", alignItems: "center", gap: 9 },
+  header: { height: 68, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: COLORS.line, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.paper },
+  brand: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 6, paddingRight: 12 },
   brandMark: { width: 32, height: 32, borderRadius: 10, backgroundColor: COLORS.green, alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "white", fontSize: 16, fontWeight: "800" },
   brandText: { color: COLORS.ink, fontSize: 21, fontWeight: "800", letterSpacing: -1 },
   brandDot: { color: "#8eaa83" },
-  headerBag: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerBag: { minHeight: 44, minWidth: 70, paddingHorizontal: 10, justifyContent: "center", flexDirection: "row", alignItems: "center", gap: 8 },
   headerBagText: { color: COLORS.ink, fontSize: 14, fontWeight: "600" },
   badge: { minWidth: 22, height: 22, borderRadius: 11, textAlign: "center", overflow: "hidden", paddingHorizontal: 5, paddingTop: 3, color: COLORS.green, backgroundColor: COLORS.greenSoft, fontSize: 11, fontWeight: "700" },
   errorBanner: { marginHorizontal: 14, marginTop: 9, padding: 11, borderRadius: 4, backgroundColor: "#f9e9e6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -774,8 +806,8 @@ const styles = StyleSheet.create({
   orderAmount: { color: COLORS.ink, fontWeight: "800", marginTop: 8, fontSize: 14 },
   orderItem: { flexDirection: "row", gap: 12, justifyContent: "space-between", paddingVertical: 11, borderBottomWidth: 1, borderColor: COLORS.line },
   warning: { color: COLORS.red, fontSize: 12, marginVertical: 12 },
-  tabBar: { height: 58, borderTopWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.paper, flexDirection: "row", justifyContent: "space-around", alignItems: "stretch" },
-  tab: { flex: 1, alignItems: "center", justifyContent: "center", position: "relative" },
+  tabBar: { borderTopWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.paper, flexDirection: "row", justifyContent: "space-around", alignItems: "stretch" },
+  tab: { minHeight: 48, flex: 1, alignItems: "center", justifyContent: "center", position: "relative" },
   tabText: { color: COLORS.muted, fontSize: 11, fontWeight: "600" },
   tabTextActive: { color: COLORS.green, fontWeight: "800" },
   tabIndicator: { height: 2, backgroundColor: COLORS.green, position: "absolute", top: 0, left: "30%", right: "30%" },

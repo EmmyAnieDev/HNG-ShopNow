@@ -39,8 +39,10 @@ SMTP account; the app does not contain fake credentials or mock external setup.
 
 The Expo / React Native client lives in [`mobile/`](./mobile/). It uses the
 same API and Supabase Auth project as this website; its server-backed cart
-refreshes on focus and app resume. Follow [`mobile/README.md`](./mobile/README.md)
-to configure its public environment values and run it on a physical phone.
+refreshes via Supabase Realtime notifications, app focus, and app resume. Apply
+the cart Realtime migration in `supabase/migrations/` before expecting automatic
+cross-client updates. Follow [`mobile/README.md`](./mobile/README.md) to configure
+its public environment values and run it on a physical phone.
 
 Deploy the Next.js application to Vercel after configuring the production
 environment variables. Configure the deployed callback URL in Supabase Auth and

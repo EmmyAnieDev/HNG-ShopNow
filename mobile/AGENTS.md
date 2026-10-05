@@ -20,12 +20,15 @@
 
 ## Cart synchronization
 - The API-backed Supabase cart is the only source of truth. Local state may render the latest API response but must not be treated as persisted cart data.
-- Refresh `GET /api/cart` on app foreground and whenever the cart screen is opened or revisited.
+- Subscribe to authenticated Supabase Realtime changes on `cart_items` and use them only to invalidate/refetch `GET /api/cart`; refresh on app foreground and whenever the cart screen is opened or revisited.
 - After any cart mutation, use the cart returned by the API or fetch the cart again.
+- Realtime requires `cart_items` in the `supabase_realtime` publication and the existing owner-scoped RLS policy to remain enabled.
 
 ## Development rules
 - Keep this app in `mobile/`; avoid changing the Stage 2 backend unless a documented API is genuinely missing.
 - Use TypeScript, small reusable components, accessible controls, and explicit loading/error states.
+- Use `react-native-safe-area-context` and flex layout; reserve screen space for persistent headers/navigation rather than overlaying content.
 - Configure public Expo values in an ignored `mobile/.env`; never copy root `.env.local` into the mobile bundle.
+- `pnpm start` must explicitly start Expo Go mode; use `pnpm start:dev-client` only with the installed ShopNow development build.
 - Run the mobile TypeScript check and Expo export before considering changes complete.
 - Test on a physical phone. `localhost` on a phone is the phone itself; use the reachable deployed API or the Mac's LAN IP.

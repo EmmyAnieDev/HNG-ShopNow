@@ -10,10 +10,12 @@ Expo + React Native + TypeScript client for the Stage 2 ShopNow REST API.
    `EXPO_PUBLIC_API_URL` to the deployed website origin or a reachable local
    development server origin. Do not add service-role or SMTP credentials.
 3. From the repository root run `pnpm install`.
-4. For browsing and password sign-in, Expo Go can run the app with
-   `pnpm --dir mobile start`. The phone and Mac need to be on the same network.
-   For Google OAuth, build and install the ShopNow development build as described
-   below; Expo Go does not support this custom-scheme OAuth callback.
+4. For browsing and password sign-in, start Expo Go mode with
+   `pnpm --dir mobile start`. This command explicitly uses `--go`; scan its QR
+   code with Expo Go. The phone and Mac need to be on the same network.
+   Do not scan a development-client QR with Expo Go. For Google OAuth, build
+   and install the ShopNow development app as described below; Expo Go does not
+   support this custom-scheme OAuth callback.
 5. Use the deployed API by default; a local API must use the Mac's LAN IP (for
    example, `http://192.168.1.20:3000`), not `localhost`.
 
@@ -64,12 +66,24 @@ do not replace it with the Expo URL. Supabase's Site URL remains the website.
    system browser. It should return to ShopNow; verify the account email and
    open **Bag** to confirm the server cart loads.
 
+Rebuild and reinstall this development app whenever a native dependency or
+native app configuration changes. A previously installed binary will not
+contain newly added native view managers such as `react-native-safe-area-context`
+and can fail with a missing ViewManager error even when Metro bundles JavaScript.
+
 Expo Go may still be used for browsing and password sign-in, but Google OAuth
 cannot complete its return-to-app step there. A development build is required.
 
 The cart is loaded from and mutated through `/api/cart*`; local component state
-is only a view cache. It refreshes when the app resumes, when the cart tab opens,
-after mutations, and periodically while the cart is visible.
+is only a view cache. Supabase Realtime `cart_items` events trigger a fresh
+`GET /api/cart`, so edits made on the website or mobile appear automatically.
+The app also refreshes the cart when resumed or when the Bag tab is opened.
+
+Apply `../supabase/migrations/202610030001_enable_cart_realtime.sql` to the
+existing Supabase project (SQL Editor or your migration workflow) to add
+`cart_items` to the Realtime publication. Existing owner-scoped RLS policies
+must stay enabled. Both website and mobile subscribe to changes and re-read
+cart data from the REST API; neither treats Realtime payloads as cart state.
 
 ## Checks
 

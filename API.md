@@ -103,6 +103,18 @@ Unknown or another user's item: `404 NOT_FOUND`.
 Deletes an item belonging to the caller's cart and returns the updated cart with
 `200`. Unknown or another user's item: `404 NOT_FOUND`.
 
+### Cross-client cart updates
+
+Web and mobile clients can subscribe to Supabase Realtime Postgres Changes on
+`public.cart_items` using the same authenticated Supabase session. The
+`cart_items` table must be included in the `supabase_realtime` publication; apply
+`supabase/migrations/202610030001_enable_cart_realtime.sql` to enable it.
+Keep the existing owner-scoped select RLS policy enabled.
+
+Treat a Realtime event only as a signal to refetch `GET /api/cart`. The REST API
+remains the cart source of truth; clients should not reconstruct cart state from
+Realtime row payloads.
+
 ## Orders
 
 All order endpoints require authentication. Orders include a historical item

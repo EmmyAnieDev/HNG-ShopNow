@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingBag, Store } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
+import { subscribeToCartChanges } from "@/lib/supabase/cart-realtime";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export function ShopHeader() {
@@ -32,20 +33,53 @@ export function ShopHeader() {
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     void refreshCartCount();
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      void refreshCartCount();
+    let active = true;
+    let stopCartSubscription: (() => void) | undefined;
+    let subscribedUserId: string | null = null;
+    let observedUserId: string | null | undefined;
+    let authStateTimer: number | undefined;
+    const listenToUserCart = (userId: string | null) => {
+      if (subscribedUserId === userId) return;
+      stopCartSubscription?.();
+      stopCartSubscription = undefined;
+      subscribedUserId = userId;
+      if (userId) {
+        stopCartSubscription = subscribeToCartChanges(
+          supabase,
+          userId,
+          () => void refreshCartCount(),
+        );
+      }
+    };
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      observedUserId = session?.user.id ?? null;
+      window.clearTimeout(authStateTimer);
+      authStateTimer = window.setTimeout(() => {
+        if (!active) return;
+        listenToUserCart(observedUserId ?? null);
+        void refreshCartCount();
+      }, 0);
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active && observedUserId === undefined) {
+        observedUserId = data.session?.user.id ?? null;
+        listenToUserCart(observedUserId);
+      }
     });
     const onCartUpdated = () => void refreshCartCount();
     window.addEventListener("shopnow:cart-updated", onCartUpdated);
     return () => {
+      active = false;
+      window.clearTimeout(authStateTimer);
       listener.subscription.unsubscribe();
+      stopCartSubscription?.();
       window.removeEventListener("shopnow:cart-updated", onCartUpdated);
     };
   }, [refreshCartCount]);
 
   async function signOut() {
     try {
-      const { error } = await createBrowserSupabaseClient().auth.signOut();
+      const { error } = await createBrowserSupabaseClient().auth.signOut({ scope: "local" });
       if (error) throw error;
       setEmail(null);
       setQuantity(0);

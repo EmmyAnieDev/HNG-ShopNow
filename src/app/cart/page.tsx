@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { formatMoney } from "@/components/format";
 import { apiRequest, ApiClientError } from "@/lib/api/client";
+import { subscribeToCartChanges } from "@/lib/supabase/cart-realtime";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type Cart = {
   items: Array<{
@@ -45,7 +47,49 @@ export default function CartPage() {
     }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+    void refresh();
+    let active = true;
+    let stopCartSubscription: (() => void) | undefined;
+    let observedUserId: string | null | undefined;
+    let authStateTimer: number | undefined;
+    let subscribedUserId: string | null = null;
+    const listenToUserCart = (userId: string | null) => {
+      if (subscribedUserId === userId) return;
+      stopCartSubscription?.();
+      stopCartSubscription = undefined;
+      subscribedUserId = userId;
+      if (userId) {
+        stopCartSubscription = subscribeToCartChanges(
+          supabase,
+          userId,
+          () => void refresh(),
+        );
+      }
+    };
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      observedUserId = session?.user.id ?? null;
+      window.clearTimeout(authStateTimer);
+      authStateTimer = window.setTimeout(() => {
+        if (!active) return;
+        listenToUserCart(observedUserId ?? null);
+        void refresh();
+      }, 0);
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active && observedUserId === undefined) {
+        observedUserId = data.session?.user.id ?? null;
+        listenToUserCart(observedUserId);
+      }
+    });
+    return () => {
+      active = false;
+      window.clearTimeout(authStateTimer);
+      listener.subscription.unsubscribe();
+      stopCartSubscription?.();
+    };
+  }, []);
 
   async function changeQuantity(itemId: string, quantity: number) {
     setError("");

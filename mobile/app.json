@@ -8,11 +8,13 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shopnow.mobile"
+      "bundleIdentifier": "com.shopnow.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.shopnow.mobile",
-      "edgeToEdgeEnabled": true
+      "package": "com.shopnow.mobile"
     },
     "plugins": [
       "expo-secure-store",
